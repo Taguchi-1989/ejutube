@@ -85,6 +85,11 @@ def _filter_hallucinations(md: str, transcript_text: str) -> str:
 
     This prevents the model from inventing commands/paths/keys. Structural
     markdown (headings, fences, "(なし)") is preserved untouched.
+
+    Uses word-boundary lookarounds (not \\b) so that tokens with non-word
+    prefix characters (e.g. /init, --force) are matched correctly without
+    also matching substrings inside longer words (e.g. /init inside
+    'initialize').
     """
     haystack = _normalize(transcript_text)
     kept: list[str] = []
@@ -110,7 +115,15 @@ def _filter_hallucinations(md: str, transcript_text: str) -> str:
             continue
 
         needle = _normalize(payload)
-        if needle and needle in haystack:
+        # Skip filtering for very short payloads (too noisy to gate reliably).
+        if len(needle) < 4:
+            kept.append(line)
+            continue
+
+        # Use word-boundary lookarounds so that e.g. "/init" does not match
+        # inside "initialize", and "npm" does not match inside "Olympic npm".
+        pattern = rf"(?<!\w){re.escape(needle)}(?!\w)"
+        if needle and re.search(pattern, haystack):
             kept.append(line)
         # else: drop the line (hallucination)
     return "\n".join(kept)

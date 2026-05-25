@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import fs from "fs";
 import { getPlayerJsonPath, validateVideoId } from "@/lib/output-dir";
-import { startJob, isJobRunning } from "@/lib/jobs";
+import { startJob } from "@/lib/jobs";
 import type { ProcessApiResult } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -95,14 +95,16 @@ export async function POST(req: NextRequest): Promise<Response> {
     return Response.json(result, { status: 200 });
   }
 
-  // Job already running?
-  if (isJobRunning(videoId)) {
+  // Kick off the pipeline (or return the already-running job).
+  // startJob is atomic: it performs the check-and-insert in a single
+  // synchronous block, eliminating the TOCTOU race between two concurrent
+  // POSTs for the same videoId.
+  const { created } = startJob(videoId, url);
+
+  if (!created) {
     const result: ProcessApiResult = { video_id: videoId, status: "in_progress" };
     return Response.json(result, { status: 200 });
   }
-
-  // Kick off the pipeline
-  startJob(videoId, url);
 
   const result: ProcessApiResult = { video_id: videoId, status: "started" };
   return Response.json(result, { status: 201 });

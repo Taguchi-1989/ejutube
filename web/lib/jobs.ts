@@ -19,7 +19,19 @@ export interface JobInfo {
 const jobs = new Map<string, JobInfo>();
 
 // Clean up all children when the server shuts down.
+// SIGTERM fires on Unix; "exit" fires on both Unix and Windows.
 process.on("SIGTERM", () => {
+  for (const [, job] of jobs) {
+    try {
+      job.process.kill();
+    } catch {
+      // already exited
+    }
+  }
+});
+
+// L1: also handle process exit (works on Windows where SIGTERM may not fire).
+process.on("exit", () => {
   for (const [, job] of jobs) {
     try {
       job.process.kill();
@@ -31,9 +43,22 @@ process.on("SIGTERM", () => {
 
 /**
  * Spawn `yt-ja process <url>` for the given video_id and register it.
- * Returns the new JobInfo. Does NOT check for existing jobs — callers must do that.
+ *
+ * Returns `{ info, created: true }` when a new job was started, or
+ * `{ info, created: false }` when a job for this videoId was already running.
+ * The check-and-insert is performed in a single synchronous block, which is
+ * safe in Node's single-threaded event loop (M2: eliminates TOCTOU race).
  */
-export function startJob(videoId: string, url: string): JobInfo {
+export function startJob(
+  videoId: string,
+  url: string
+): { info: JobInfo; created: boolean } {
+  // Atomic check: if a running job already exists, return it immediately.
+  const existing = jobs.get(videoId);
+  if (existing !== undefined && existing.exit_code === null) {
+    return { info: existing, created: false };
+  }
+
   // Repo root is one level up from web/ (Next.js cwd is web/ at runtime).
   const cwd = path.resolve(process.cwd(), "..");
 
@@ -53,6 +78,12 @@ export function startJob(videoId: string, url: string): JobInfo {
     stderr: "",
   };
 
+  // M1: handle spawn errors (e.g. yt-ja not in PATH) so they don't crash Next.js.
+  child.on("error", (err) => {
+    info.stderr = String(err);
+    info.exit_code = -1;
+  });
+
   child.stderr?.on("data", (chunk: Buffer) => {
     info.stderr = (info.stderr + chunk.toString()).slice(-2000);
   });
@@ -62,7 +93,7 @@ export function startJob(videoId: string, url: string): JobInfo {
   });
 
   jobs.set(videoId, info);
-  return info;
+  return { info, created: true };
 }
 
 /** Return the registered JobInfo for a video_id, or undefined if not found. */

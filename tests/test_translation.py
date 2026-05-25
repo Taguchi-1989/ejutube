@@ -278,6 +278,48 @@ def test_commands_filter_preserves_structural_lines():
     assert "(なし)" in filtered
 
 
+def test_commands_filter_word_boundary_slash_command():
+    """M3: /init extracted from transcript with 'initialize' should be DROPPED.
+
+    Without word-boundary matching, '/init' would substring-match inside
+    'initialize', causing a false negative (hallucination kept).
+    With (?<!\\w)/init(?!\\w) the match fails and the line is correctly dropped.
+    """
+    from pipeline.translation.commands import _filter_hallucinations
+
+    # Transcript says "initialize" — does NOT contain "/init" as a token.
+    transcript = "Use the initialize command to set up your project."
+    md = (
+        "# Config / Keys\n"
+        "- /init\n"
+    )
+    filtered = _filter_hallucinations(md, transcript)
+    # /init must be dropped — it was not present as a standalone token.
+    assert "/init" not in filtered
+
+
+def test_commands_filter_word_boundary_keeps_real_slash_command():
+    """M3: /init extracted from transcript that literally contains '/init' should be KEPT.
+
+    'Command Shift P' extracted with actual 'Command Shift P' in transcript
+    must also be kept.
+    """
+    from pipeline.translation.commands import _filter_hallucinations
+
+    transcript = "Type /init and press Command Shift P to run the command."
+    md = (
+        "# Config / Keys\n"
+        "- /init\n"
+        "- Command Shift P\n"
+        "- /phantom\n"
+    )
+    filtered = _filter_hallucinations(md, transcript)
+    assert "/init" in filtered
+    assert "Command Shift P" in filtered
+    # /phantom is not in transcript — must be dropped.
+    assert "/phantom" not in filtered
+
+
 def test_extract_commands_post_filters_hallucinations(tmp_path, monkeypatch):
     """End-to-end: mock LLM returns hallucinated entries; post-filter removes them."""
     monkeypatch.setenv("OUTPUT_DIR", str(tmp_path))

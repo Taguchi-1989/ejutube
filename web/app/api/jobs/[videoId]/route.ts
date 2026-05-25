@@ -2,7 +2,32 @@ import { NextRequest } from "next/server";
 import fs from "fs";
 import { validateVideoId, getMetadataPath } from "@/lib/output-dir";
 import { getJob } from "@/lib/jobs";
-import type { Metadata, JobStatus } from "@/lib/types";
+import type { Metadata, JobStatus, ProcessingStatus } from "@/lib/types";
+
+const VALID_STATUSES = new Set<ProcessingStatus>([
+  "created",
+  "metadata_loaded",
+  "subtitle_fetched",
+  "subtitle_normalized",
+  "chunked",
+  "translated",
+  "narration_script_created",
+  "tts_generated",
+  "sync_generated",
+  "completed",
+  "failed_no_subtitle",
+  "failed_translation",
+  "failed_tts",
+  "failed_sync",
+  "failed_unknown",
+]);
+
+function validateStatus(s: unknown): ProcessingStatus {
+  if (typeof s === "string" && VALID_STATUSES.has(s as ProcessingStatus)) {
+    return s as ProcessingStatus;
+  }
+  return "failed_unknown";
+}
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +56,7 @@ export async function GET(
         const metaPath = getMetadataPath(videoId);
         if (fs.existsSync(metaPath)) {
           const meta: Metadata = JSON.parse(fs.readFileSync(metaPath, "utf-8"));
-          resolvedStatus = meta.status;
+          resolvedStatus = validateStatus(meta.status);
         }
       } catch {
         // fall through to exit_code-based status
@@ -61,7 +86,7 @@ export async function GET(
     const meta: Metadata = JSON.parse(fs.readFileSync(metaPath, "utf-8"));
     const response: JobStatus = {
       video_id: videoId,
-      status: meta.status,
+      status: validateStatus(meta.status),
       started_at: null,
       exit_code: null,
     };
