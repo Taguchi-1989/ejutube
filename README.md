@@ -16,6 +16,24 @@ YouTube IFrame Player. No video file is downloaded or stored.
 
 ---
 
+## 簡単セットアップ（Windows）
+
+### 初回セットアップ
+1. 必要なソフトをインストール（不足分はスクリプトが教えてくれます）:
+   - Python 3.11+ / Node.js 18+ / Ollama / VOICEVOX
+2. `scripts\setup.bat` をダブルクリック
+3. `scripts\start.bat` で起動
+
+### 日常起動
+- `scripts\start.bat` だけでOK（Ollama起動・依存確認・サーバ起動・ブラウザ開く まで自動）
+
+### 動画を処理する
+`scripts\process.bat "https://www.youtube.com/watch?v=VIDEO_ID"`
+
+詳細なフローは `scripts\FLOW.md` を参照。
+
+---
+
 ## クイックスタート
 
 ### 前提条件
