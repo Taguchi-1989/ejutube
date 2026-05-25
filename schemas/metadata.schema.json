@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "metadata.schema.json",
+  "title": "Metadata",
+  "description": "動画メタデータ。処理開始時に生成し、各ステップで status を更新する。",
+  "type": "object",
+  "required": ["video_id", "url", "title", "channel", "duration", "created_at", "status"],
+  "additionalProperties": false,
+  "properties": {
+    "video_id": {
+      "type": "string",
+      "description": "YouTubeのvideo_id (11文字英数字)",
+      "pattern": "^[A-Za-z0-9_-]{11}$"
+    },
+    "url": {
+      "type": "string",
+      "description": "元のYouTube URL",
+      "format": "uri",
+      "pattern": "^https://(www\\.youtube\\.com/watch\\?v=|youtu\\.be/)[A-Za-z0-9_-]"
+    },
+    "title": {
+      "type": "string",
+      "description": "動画タイトル",
+      "minLength": 1
+    },
+    "channel": {
+      "type": "string",
+      "description": "チャンネル名",
+      "minLength": 1
+    },
+    "duration": {
+      "type": "number",
+      "description": "動画の総再生時間（秒）",
+      "minimum": 0
+    },
+    "created_at": {
+      "type": "string",
+      "description": "レコード作成日時（ISO 8601形式）",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "description": "パイプライン処理状態",
+      "enum": [
+        "created",
+        "metadata_loaded",
+        "subtitle_fetched",
+        "subtitle_normalized",
+        "chunked",
+        "translated",
+        "narration_script_created",
+        "tts_generated",
+        "sync_generated",
+        "completed",
+        "failed_no_subtitle",
+        "failed_translation",
+        "failed_tts",
+        "failed_sync",
+        "failed_unknown"
+      ]
+    }
+  }
+}

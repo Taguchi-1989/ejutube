@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "transcript-normalized.schema.json",
+  "title": "TranscriptNormalized",
+  "description": "VTT/SRTを正規化した英語字幕アイテムの配列。秒数に変換済み。",
+  "type": "array",
+  "items": {
+    "$ref": "#/definitions/TranscriptItem"
+  },
+  "definitions": {
+    "TranscriptItem": {
+      "type": "object",
+      "required": ["id", "start", "end", "text_en"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "integer",
+          "description": "字幕アイテムの連番（1始まり）",
+          "minimum": 1
+        },
+        "start": {
+          "type": "number",
+          "description": "字幕開始時刻（秒）",
+          "minimum": 0
+        },
+        "end": {
+          "type": "number",
+          "description": "字幕終了時刻（秒）",
+          "minimum": 0
+        },
+        "text_en": {
+          "type": "string",
+          "description": "英語字幕テキスト（ノイズ除去済み）",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

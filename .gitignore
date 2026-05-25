@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.env
+
+# Node
+node_modules/
+.next/
+web/.next/
+web/node_modules/
+*.tsbuildinfo
+
+# Generated outputs — never commit audio or processed video assets
+output/
+audio/
+*.wav
+*.mp3
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ejutube publication policy:
+#   - Code, schemas, docs, sample VTT (fictional content) ARE publishable.
+#   - Anything derived from real YouTube videos (output/) is NOT publishable
+#     per the project's non-distribution stance (see README + requirements §18.4).
+#   - TTS voice samples are excluded because they incorporate VOICEVOX speaker
+#     libraries with their own attribution requirements.
+samples/voice_previews/
+.claude/
+.playwright-mcp/
+*.log
+output-*/
+.env.local
+.env.*.local
+
+# Stray dev artifacts
+screenshot-*.png

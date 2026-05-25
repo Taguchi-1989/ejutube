@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "narration-segments.schema.json",
+  "title": "NarrationSegments",
+  "description": "TTS音声生成後の音声長計測データ。チャンクごとの動画区間と音声長の差分を記録する。",
+  "type": "array",
+  "items": {
+    "$ref": "#/definitions/NarrationSegment"
+  },
+  "definitions": {
+    "NarrationSegment": {
+      "type": "object",
+      "required": [
+        "chunk_id",
+        "video_start",
+        "video_end",
+        "target_duration",
+        "audio_duration",
+        "duration_diff",
+        "audio_file"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "chunk_id": {
+          "type": "integer",
+          "description": "対応するチャンクの chunk_id",
+          "minimum": 1
+        },
+        "video_start": {
+          "type": "number",
+          "description": "動画上のチャンク開始時刻（秒）",
+          "minimum": 0
+        },
+        "video_end": {
+          "type": "number",
+          "description": "動画上のチャンク終了時刻（秒）",
+          "minimum": 0
+        },
+        "target_duration": {
+          "type": "number",
+          "description": "チャンクの目標再生時間 = video_end - video_start（秒）",
+          "minimum": 0
+        },
+        "audio_duration": {
+          "type": "number",
+          "description": "生成されたTTS音声の実際の長さ（秒）",
+          "minimum": 0
+        },
+        "duration_diff": {
+          "type": "number",
+          "description": "音声長と目標時間の差分 = audio_duration - target_duration（秒、正なら音声が長い）"
+        },
+        "audio_file": {
+          "type": "string",
+          "description": "音声ファイルの相対パス（output/{video_id}/ からの相対）",
+          "pattern": "^audio/[0-9]{4}\\.wav$"
+        }
+      }
+    }
+  }
+}

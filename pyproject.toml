@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ejutube-pipeline"
+version = "0.1.0"
+description = "YouTube英語チュートリアル日本語化パイプライン"
+requires-python = ">=3.11"
+dependencies = [
+    "typer>=0.12",
+    "httpx>=0.27",
+    "webvtt-py>=0.5",
+    "pysubs2>=1.7",
+    "pydantic>=2.7",
+    "python-dotenv>=1.0",
+    "click>=8.1",
+    "youtube-transcript-api>=0.6",
+    "yt-dlp>=2024.1",
+    "rich>=13.0",
+    "anthropic>=0.40",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
+[project.scripts]
+yt-ja = "pipeline.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pipeline*"]
+
+[tool.setuptools.package-dir]
+"" = "."
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+tmp_path_retention_policy = "failed"
+tmp_path_retention_count = 3
+markers = [
+    "integration: marks tests that require external services (e.g., VOICEVOX running)",
+]

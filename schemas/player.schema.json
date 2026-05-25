@@ -1,0 +1,70 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "player.schema.json",
+  "title": "PlayerJson",
+  "description": "フロントエンドが読み込む同期再生データ。チャンクごとの音声ファイル・字幕・台本・要約を含む。",
+  "type": "object",
+  "required": ["video_id", "audio_offset", "chunks"],
+  "additionalProperties": false,
+  "properties": {
+    "video_id": {
+      "type": "string",
+      "description": "YouTubeのvideo_id",
+      "pattern": "^[A-Za-z0-9_-]{11}$"
+    },
+    "audio_offset": {
+      "type": "number",
+      "description": "グローバル音ズレ補正値（秒）。正=音声を遅らせる、負=音声を早める。",
+      "default": 0
+    },
+    "chunks": {
+      "type": "array",
+      "description": "再生チャンクの配列",
+      "items": {
+        "$ref": "#/definitions/PlayerChunk"
+      },
+      "minItems": 1
+    }
+  },
+  "definitions": {
+    "PlayerChunk": {
+      "type": "object",
+      "required": ["chunk_id", "start", "end", "audio", "subtitle_ja", "narration_ja", "summary"],
+      "additionalProperties": false,
+      "properties": {
+        "chunk_id": {
+          "type": "integer",
+          "description": "チャンクの連番",
+          "minimum": 1
+        },
+        "start": {
+          "type": "number",
+          "description": "チャンク開始時刻（秒）",
+          "minimum": 0
+        },
+        "end": {
+          "type": "number",
+          "description": "チャンク終了時刻（秒）",
+          "minimum": 0
+        },
+        "audio": {
+          "type": "string",
+          "description": "音声ファイルの相対パス（output/{video_id}/ からの相対）。TTS未生成時は空文字列。",
+          "pattern": "^(audio/[0-9]{4}\\.wav)?$"
+        },
+        "subtitle_ja": {
+          "type": "string",
+          "description": "日本語字幕テキスト"
+        },
+        "narration_ja": {
+          "type": "string",
+          "description": "読み上げ台本テキスト"
+        },
+        "summary": {
+          "type": "string",
+          "description": "チャンクの要約テキスト"
+        }
+      }
+    }
+  }
+}

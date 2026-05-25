@@ -1,0 +1,42 @@
+{
+  "video_id": "DEMO0000000",
+  "audio_offset": 0,
+  "chunks": [
+    {
+      "chunk_id": 1,
+      "start": 0.0,
+      "end": 20.4,
+      "audio": "audio/0001.wav",
+      "subtitle_ja": "このチュートリアルでは、CursorとClaude Codeを連携させる方法を解説します。MCPプロトコルを使って接続します。",
+      "narration_ja": "では、CursorとClaude Codeの連携方法を見ていきましょう。ここではMCPプロトコルを使います。",
+      "summary": "チュートリアルの概要。CursorとClaude CodeをMCPで接続する手順を説明。"
+    },
+    {
+      "chunk_id": 2,
+      "start": 20.4,
+      "end": 45.0,
+      "audio": "audio/0002.wav",
+      "subtitle_ja": "まず、ターミナルを開いてプロジェクトリポジトリに移動してください。Claude Codeエージェントを初期化するコマンドを実行します。",
+      "narration_ja": "まずはターミナルを開きます。次に、プロジェクトのリポジトリに移動してください。そして、Claude Codeを初期化するコマンドを実行します。",
+      "summary": "ターミナルでの初期設定。Claude Codeエージェントの初期化コマンドを実行する手順。"
+    },
+    {
+      "chunk_id": 3,
+      "start": 45.0,
+      "end": 67.9,
+      "audio": "audio/0003.wav",
+      "subtitle_ja": "次に、Cursor IDEを開いてCommand Shift Pでコマンドパレットを開きます。「Claude Code」と入力して接続オプションを選択してください。",
+      "narration_ja": "次はCursor IDEを開いてください。Command Shift Pでコマンドパレットを表示します。「Claude Code」と入力して、接続オプションを選択します。",
+      "summary": "Cursor IDEでの接続操作。コマンドパレットからClaude Codeに接続する手順。"
+    },
+    {
+      "chunk_id": 4,
+      "start": 67.9,
+      "end": 96.2,
+      "audio": "audio/0004.wav",
+      "subtitle_ja": "接続が完了したら、/initコマンドでエージェントにコードベースを探索させます。CLAUDE.mdファイルにコンテキストが保存されます。その後、機能追加やバグ修正などの指示が出せます。",
+      "narration_ja": "接続できたら、/initと入力してみてください。エージェントがリポジトリを解析します。結果はCLAUDE.mdに保存されます。あとは機能追加やバグ修正など、自由に指示できます。",
+      "summary": "/initによるコードベース解析。CLAUDE.mdの生成と、機能追加の実例紹介。"
+    }
+  ]
+}

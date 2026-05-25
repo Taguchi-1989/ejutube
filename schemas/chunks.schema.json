@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "chunks.schema.json",
+  "title": "Chunks",
+  "description": "字幕を10〜30秒単位に分割したチャンクの配列。翻訳後に subtitle_ja / narration_ja が追加される。",
+  "type": "array",
+  "items": {
+    "$ref": "#/definitions/Chunk"
+  },
+  "definitions": {
+    "Chunk": {
+      "type": "object",
+      "required": ["chunk_id", "start", "end", "text_en"],
+      "additionalProperties": false,
+      "properties": {
+        "chunk_id": {
+          "type": "integer",
+          "description": "チャンクの連番（1始まり）",
+          "minimum": 1
+        },
+        "start": {
+          "type": "number",
+          "description": "チャンク開始時刻（秒）",
+          "minimum": 0
+        },
+        "end": {
+          "type": "number",
+          "description": "チャンク終了時刻（秒）",
+          "minimum": 0
+        },
+        "items": {
+          "type": "array",
+          "description": "このチャンクに含まれる TranscriptItem の id 一覧",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "text_en": {
+          "type": "string",
+          "description": "チャンク内の英語テキスト（改行区切りで結合）",
+          "minLength": 1
+        },
+        "subtitle_ja": {
+          "type": "string",
+          "description": "日本語字幕テキスト（翻訳ステップ後に設定）"
+        },
+        "narration_ja": {
+          "type": "string",
+          "description": "読み上げ台本テキスト（台本生成ステップ後に設定）"
+        }
+      }
+    }
+  }
+}

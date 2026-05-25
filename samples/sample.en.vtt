@@ -1,0 +1,49 @@
+WEBVTT
+
+00:00:02.000 --> 00:00:05.500
+Welcome to this tutorial on Claude Code and Cursor.
+
+00:00:05.800 --> 00:00:10.200
+In this video, we'll connect Cursor to Claude Code using the MCP protocol.
+
+00:00:10.500 --> 00:00:15.000
+First, make sure you have Cursor installed and your API key configured.
+
+00:00:15.300 --> 00:00:20.400
+Open your terminal and navigate to your project repository.
+
+00:00:20.700 --> 00:00:26.000
+Run the following command to initialize the Claude Code agent in your workspace.
+
+00:00:26.300 --> 00:00:32.100
+You should see a prompt asking you to confirm the MCP server endpoint.
+
+00:00:32.500 --> 00:00:38.800
+Next, open the Cursor IDE and press Command Shift P to open the command palette.
+
+00:00:39.100 --> 00:00:45.000
+Type "Claude Code" and select the connect option from the dropdown.
+
+00:00:45.400 --> 00:00:51.200
+Cursor will now establish a WebSocket connection to the local MCP server.
+
+00:00:51.600 --> 00:00:57.900
+Once connected, you can use slash commands directly inside Cursor's chat panel.
+
+00:00:58.200 --> 00:01:04.500
+Try typing /init to let the agent explore your codebase and build a context map.
+
+00:01:04.800 --> 00:01:11.000
+The agent will scan your repository, detect the tech stack, and summarize key files.
+
+00:01:11.400 --> 00:01:17.600
+This context is stored in a CLAUDE.md file at the root of your project.
+
+00:01:17.900 --> 00:01:23.800
+Now you can ask Claude Code to implement features, fix bugs, or review pull requests.
+
+00:01:24.100 --> 00:01:30.000
+Let's try a simple example: ask it to add a new API endpoint to our Next.js app.
+
+00:01:30.400 --> 00:01:36.200
+Type: "Add a GET endpoint at /api/status that returns the server uptime."
