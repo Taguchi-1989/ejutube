@@ -320,6 +320,26 @@ def test_commands_filter_word_boundary_keeps_real_slash_command():
     assert "/phantom" not in filtered
 
 
+def test_commands_filter_cjk_adjacency():
+    """Low 1: 'npm' adjacent to a CJK char must still be KEPT.
+
+    Python re Unicode mode treats CJK chars as \\w, so the old
+    (?<!\\w)npm(?!\\w) pattern would fail to match 'npm' in 'npmコマンドを実行'
+    because 'コ' is a Unicode word char. The fix uses ASCII-only boundaries.
+    """
+    from pipeline.translation.commands import _filter_hallucinations
+
+    transcript = "npmコマンドを実行してください。"
+    md = (
+        "# Commands\n"
+        "```bash\n"
+        "npm\n"
+        "```\n"
+    )
+    filtered = _filter_hallucinations(md, transcript)
+    assert "npm" in filtered, "npm adjacent to CJK should be KEPT"
+
+
 def test_extract_commands_post_filters_hallucinations(tmp_path, monkeypatch):
     """End-to-end: mock LLM returns hallucinated entries; post-filter removes them."""
     monkeypatch.setenv("OUTPUT_DIR", str(tmp_path))

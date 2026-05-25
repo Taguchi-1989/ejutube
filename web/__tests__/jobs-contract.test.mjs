@@ -1,13 +1,18 @@
 /**
- * Tests for web/lib/jobs.ts logic using Node.js built-in test runner.
+ * CONTRACT / REPLICA TEST for web/lib/jobs.ts.
  *
- * Because jobs.ts is a Next.js module (path alias "@/lib/jobs", ESM bundler
- * resolution), it cannot be imported directly by node:test without a full
- * bundler setup. Instead, this file replicates the exact logic under test and
- * verifies it with a fake EventEmitter that stands in for child_process.spawn.
+ * This file is intentionally a contract test: it does NOT import the real
+ * web/lib/jobs.ts source. Instead, it replicates the module's logic inline
+ * using a fake EventEmitter so the tests can run under plain Node without a
+ * bundler or tsx/ts-node setup.
+ *
+ * IMPORTANT: When changing logic in web/lib/jobs.ts, update the replica in
+ * makeJobsModule() below to match. The two must stay in sync.
+ *
+ * Real source: web/lib/jobs.ts
  *
  * Run with:
- *   node --test web/__tests__/jobs.test.mjs
+ *   node --test web/__tests__/jobs-contract.test.mjs
  */
 
 import { test, describe } from "node:test";

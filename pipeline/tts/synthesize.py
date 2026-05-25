@@ -111,14 +111,22 @@ async def _synth_one(
                     f"{audio_duration:.2f}s > target {target_duration:.2f}s — "
                     f"re-synth at speed_scale={new_speed:.3f} (was {final_speed:.3f})"
                 )
-                audio_duration = await _synth_at_speed(
-                    client=client,
-                    text=chunk.narration_ja,
-                    speaker=speaker,
-                    speed_scale=new_speed,
-                    wav_path=wav_path,
-                )
-                final_speed = new_speed
+                try:
+                    audio_duration = await _synth_at_speed(
+                        client=client,
+                        text=chunk.narration_ja,
+                        speaker=speaker,
+                        speed_scale=new_speed,
+                        wav_path=wav_path,
+                    )
+                    final_speed = new_speed
+                except Exception as exc:
+                    # Retry failed — keep the initial synth (wav_path still holds
+                    # the first render) and continue the pipeline without crashing.
+                    print(
+                        f"[tts] chunk {chunk.chunk_id}: retry failed ({exc}) "
+                        f"— keeping initial synth"
+                    )
 
     return NarrationSegment(
         chunk_id=chunk.chunk_id,

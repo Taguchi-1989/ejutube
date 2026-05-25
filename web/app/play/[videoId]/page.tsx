@@ -60,15 +60,26 @@ function isComplete(status: ProcessingStatus | "running" | "failed_unknown"): bo
   return status === "completed";
 }
 
+/** Hard cap: stop polling after 20 minutes to handle silently-hung pipelines. */
+const MAX_POLL_MS = 20 * 60 * 1000;
+
 /**
  * Polls /api/jobs/{videoId} every 3s while enabled.
  * Stops automatically when status is completed or a failed_* state.
+ * Also stops after MAX_POLL_MS and returns a sentinel timed-out state so the
+ * UI can prompt the user to retry manually.
  */
 function useJobStatus(videoId: string, enabled: boolean) {
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
+  const [timedOut, setTimedOut] = useState(false);
+
+  // Allow the user to reset the timer and resume polling.
+  const resetTimeout = () => {
+    setTimedOut(false);
+  };
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || timedOut) return;
 
     let cancelled = false;
 
@@ -86,13 +97,23 @@ function useJobStatus(videoId: string, enabled: boolean) {
 
     poll();
     const id = setInterval(poll, 3000);
+
+    // Hard cap: stop polling after MAX_POLL_MS.
+    const capId = setTimeout(() => {
+      if (!cancelled) {
+        clearInterval(id);
+        setTimedOut(true);
+      }
+    }, MAX_POLL_MS);
+
     return () => {
       cancelled = true;
       clearInterval(id);
+      clearTimeout(capId);
     };
-  }, [videoId, enabled]);
+  }, [videoId, enabled, timedOut]);
 
-  return jobStatus;
+  return { jobStatus, timedOut, resetTimeout };
 }
 
 export default function PlayerPage() {
@@ -144,7 +165,7 @@ export default function PlayerPage() {
   }, [videoId]);
 
   // Poll job status while pipeline is running; reload player.json when done.
-  const jobStatus = useJobStatus(videoId, processingPending);
+  const { jobStatus, timedOut, resetTimeout } = useJobStatus(videoId, processingPending);
   useEffect(() => {
     if (!jobStatus) return;
     if (isComplete(jobStatus.status)) {
@@ -275,6 +296,46 @@ export default function PlayerPage() {
     const currentStatus = jobStatus?.status ?? "running";
     const failed = isFailed(currentStatus);
     const progressPct = stageProgress(currentStatus);
+
+    // Polling timed out — pipeline silently hung.
+    if (timedOut) {
+      return (
+        <div
+          className="flex flex-col items-center justify-center min-h-screen gap-6 px-4"
+          style={{ background: "var(--bg-base)" }}
+        >
+          <div
+            className="w-full max-w-md rounded-xl p-6 flex flex-col gap-4"
+            style={{
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-subtle)",
+            }}
+          >
+            <h1 className="text-base font-medium" style={{ color: "var(--text-primary)" }}>
+              処理タイムアウト
+            </h1>
+            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              処理が予想以上に時間がかかっています。ログを確認してください。
+            </p>
+            <button
+              className="text-sm px-4 py-2 rounded"
+              style={{
+                background: "var(--accent-blue)",
+                color: "#fff",
+                border: "none",
+                cursor: "pointer",
+              }}
+              onClick={resetTimeout}
+            >
+              ポーリングを再開する
+            </button>
+          </div>
+          <a href="/" className="text-sm underline" style={{ color: "var(--accent-blue)" }}>
+            一覧に戻る
+          </a>
+        </div>
+      );
+    }
 
     return (
       <div

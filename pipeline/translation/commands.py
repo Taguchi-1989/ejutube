@@ -120,9 +120,12 @@ def _filter_hallucinations(md: str, transcript_text: str) -> str:
             kept.append(line)
             continue
 
-        # Use word-boundary lookarounds so that e.g. "/init" does not match
-        # inside "initialize", and "npm" does not match inside "Olympic npm".
-        pattern = rf"(?<!\w){re.escape(needle)}(?!\w)"
+        # Use ASCII-only word-boundary lookarounds so that tokens like "npm"
+        # are not falsely blocked by adjacent CJK characters (e.g. "npmコマンド").
+        # Python's \w in Unicode mode treats CJK chars as word chars, which
+        # would make (?<!\w)npm(?!\w) fail to match "npm" in "npmコマンド".
+        # Using [A-Za-z0-9_] restricts the boundary check to ASCII word chars.
+        pattern = rf"(?<![A-Za-z0-9_]){re.escape(needle)}(?![A-Za-z0-9_])"
         if needle and re.search(pattern, haystack):
             kept.append(line)
         # else: drop the line (hallucination)

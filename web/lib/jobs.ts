@@ -31,15 +31,20 @@ process.on("SIGTERM", () => {
 });
 
 // L1: also handle process exit (works on Windows where SIGTERM may not fire).
-process.on("exit", () => {
-  for (const [, job] of jobs) {
-    try {
-      job.process.kill();
-    } catch {
-      // already exited
+// Gate on production to avoid orphaning in-flight pipelines during Next.js
+// HMR restarts in development — each HMR cycle fires "exit", which would kill
+// any running child process. In dev, let ChildProcesses survive HMR naturally.
+if (process.env.NODE_ENV === "production") {
+  process.on("exit", () => {
+    for (const [, job] of jobs) {
+      try {
+        job.process.kill();
+      } catch {
+        // already exited
+      }
     }
-  }
-});
+  });
+}
 
 /**
  * Spawn `yt-ja process <url>` for the given video_id and register it.
@@ -99,10 +104,4 @@ export function startJob(
 /** Return the registered JobInfo for a video_id, or undefined if not found. */
 export function getJob(videoId: string): JobInfo | undefined {
   return jobs.get(videoId);
-}
-
-/** True if there is a running (not yet exited) job for this video_id. */
-export function isJobRunning(videoId: string): boolean {
-  const job = jobs.get(videoId);
-  return job !== undefined && job.exit_code === null;
 }
