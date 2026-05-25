@@ -198,6 +198,143 @@ class _DummyResponse:
 
 
 # ---------------------------------------------------------------------------
+# Issue H: narrate prompt must reference the subtitle as anti-example
+# ---------------------------------------------------------------------------
+
+
+def test_narrate_user_prompt_includes_subtitle_anti_example():
+    """The user prompt must contain the subtitle marked as DO NOT MATCH."""
+    chunk = Chunk(
+        chunk_id=1,
+        start=0.0,
+        end=10.0,
+        items=[1],
+        text_en="Open Cursor and connect Claude Code.",
+        subtitle_ja="Cursor を開き、Claude Code と接続します。",
+    )
+    prompt = nmod._user_prompt(prev=None, current=chunk, nxt=None)
+    assert "DO NOT MATCH" in prompt
+    assert "Cursor を開き、Claude Code と接続します。" in prompt
+
+
+def test_narrate_system_prompt_forbids_subtitle_identity():
+    """The system prompt must explicitly forbid matching the subtitle."""
+    system = nmod._system_prompt({})
+    assert "字幕とは異なる" in system or "同一にしてはならない" in system
+
+
+# ---------------------------------------------------------------------------
+# Issue I: commands extraction post-filter
+# ---------------------------------------------------------------------------
+
+
+def test_commands_filter_keeps_present_items_drops_hallucinations():
+    from pipeline.translation.commands import _filter_hallucinations
+
+    transcript = (
+        "Press Command Shift P to open the palette, then run npm install. "
+        "Open package.json to check the deps."
+    )
+    md = (
+        "# Commands\n"
+        "```bash\n"
+        "npm install\n"
+        "rm -rf /\n"
+        "```\n"
+        "# Files\n"
+        "- package.json\n"
+        "- nonexistent.yaml\n"
+        "# Config / Keys\n"
+        "- Command Shift P\n"
+        "- /api/fake\n"
+    )
+    filtered = _filter_hallucinations(md, transcript)
+    assert "npm install" in filtered
+    assert "package.json" in filtered
+    assert "Command Shift P" in filtered
+    # Hallucinations dropped
+    assert "rm -rf /" not in filtered
+    assert "nonexistent.yaml" not in filtered
+    assert "/api/fake" not in filtered
+    # Headers preserved
+    assert "# Commands" in filtered
+    assert "# Files" in filtered
+
+
+def test_commands_filter_preserves_structural_lines():
+    from pipeline.translation.commands import _filter_hallucinations
+
+    md = (
+        "# Commands\n"
+        "```bash\n"
+        "# (なし)\n"
+        "```\n"
+        "# Files\n"
+        "- (なし)\n"
+    )
+    filtered = _filter_hallucinations(md, "irrelevant transcript text")
+    assert "# Commands" in filtered
+    assert "```" in filtered
+    assert "(なし)" in filtered
+
+
+def test_extract_commands_post_filters_hallucinations(tmp_path, monkeypatch):
+    """End-to-end: mock LLM returns hallucinated entries; post-filter removes them."""
+    monkeypatch.setenv("OUTPUT_DIR", str(tmp_path))
+    monkeypatch.setenv("EJUTUBE_LLM_BACKEND", "anthropic")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    ab_mod.reset_client()
+    client_mod.reset_client()
+
+    video_id = "CMDTEST0001"
+    out = tmp_path / video_id
+    out.mkdir()
+    items = [
+        {"id": 1, "start": 0.0, "end": 5.0, "text_en": "Press Command Shift P."},
+        {"id": 2, "start": 5.0, "end": 10.0, "text_en": "Then run npm install in your terminal."},
+        {"id": 3, "start": 10.0, "end": 15.0, "text_en": "Check package.json afterward."},
+    ]
+    (out / "transcript.normalized.json").write_text(
+        json.dumps(items, ensure_ascii=False), encoding="utf-8"
+    )
+
+    fake_md = (
+        "# Commands\n"
+        "```bash\n"
+        "npm install\n"
+        "git push origin main\n"
+        "```\n"
+        "# Files\n"
+        "- package.json\n"
+        "- secrets.env\n"
+        "# Config / Keys\n"
+        "- Command Shift P\n"
+        "- /api/foo\n"
+    )
+
+    async def fake_create(**kwargs):
+        return _fake_response(fake_md)
+
+    from pipeline.translation.commands import extract_commands
+
+    with patch.object(ab_mod, "get_client") as mock_get:
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(side_effect=fake_create)
+        mock_get.return_value = mock_client
+        path = extract_commands(video_id)
+
+    result = path.read_text(encoding="utf-8")
+    # Real items present in transcript
+    assert "npm install" in result
+    assert "package.json" in result
+    assert "Command Shift P" in result
+    # Hallucinations dropped
+    assert "git push origin main" not in result
+    assert "secrets.env" not in result
+    assert "/api/foo" not in result
+
+
+# ---------------------------------------------------------------------------
 # Live integration test — hits real API on 2 chunks
 # ---------------------------------------------------------------------------
 

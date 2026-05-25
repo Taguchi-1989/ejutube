@@ -2,13 +2,98 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useParams } from "next/navigation";
-import type { PlayerJson, PlayerChunk } from "@/lib/types";
+import type { PlayerJson, PlayerChunk, ProcessingStatus, JobStatus } from "@/lib/types";
 import type { YTPlayer } from "@/lib/youtube-types";
 import { YouTubePlayer } from "./_components/YouTubePlayer";
 import { JapaneseAudio } from "./_components/JapaneseAudio";
 import { PlayerControls } from "./_components/PlayerControls";
 import { ChapterList } from "./_components/ChapterList";
 import { useChunkSync } from "./_components/useChunkSync";
+
+const PROCESSING_STAGES: ProcessingStatus[] = [
+  "created",
+  "metadata_loaded",
+  "subtitle_fetched",
+  "subtitle_normalized",
+  "chunked",
+  "translated",
+  "narration_script_created",
+  "tts_generated",
+  "sync_generated",
+  "completed",
+];
+
+function stageProgress(status: ProcessingStatus | "running" | "failed_unknown"): number {
+  if (status === "running" || status === "created") return 5;
+  const idx = PROCESSING_STAGES.indexOf(status as ProcessingStatus);
+  if (idx < 0) return 0;
+  return Math.round(((idx + 1) / PROCESSING_STAGES.length) * 100);
+}
+
+function stageLabel(status: ProcessingStatus | "running" | "failed_unknown"): string {
+  const labels: Partial<Record<ProcessingStatus | "running" | "failed_unknown", string>> = {
+    running: "起動中",
+    created: "作成済み",
+    metadata_loaded: "メタデータ取得",
+    subtitle_fetched: "字幕取得",
+    subtitle_normalized: "字幕正規化",
+    chunked: "チャンク分割",
+    translated: "翻訳",
+    narration_script_created: "ナレーション生成",
+    tts_generated: "音声合成",
+    sync_generated: "同期生成",
+    completed: "完了",
+    failed_no_subtitle: "失敗: 字幕なし",
+    failed_translation: "失敗: 翻訳エラー",
+    failed_tts: "失敗: 音声合成エラー",
+    failed_sync: "失敗: 同期エラー",
+    failed_unknown: "失敗: 不明なエラー",
+  };
+  return labels[status] ?? status;
+}
+
+function isFailed(status: ProcessingStatus | "running" | "failed_unknown"): boolean {
+  return status.startsWith("failed_");
+}
+
+function isComplete(status: ProcessingStatus | "running" | "failed_unknown"): boolean {
+  return status === "completed";
+}
+
+/**
+ * Polls /api/jobs/{videoId} every 3s while enabled.
+ * Stops automatically when status is completed or a failed_* state.
+ */
+function useJobStatus(videoId: string, enabled: boolean) {
+  const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
+
+  useEffect(() => {
+    if (!enabled) return;
+
+    let cancelled = false;
+
+    async function poll() {
+      try {
+        const res = await fetch(`/api/jobs/${videoId}`);
+        if (!cancelled && res.ok) {
+          const data = await res.json() as JobStatus;
+          setJobStatus(data);
+        }
+      } catch {
+        // network error — keep polling
+      }
+    }
+
+    poll();
+    const id = setInterval(poll, 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [videoId, enabled]);
+
+  return jobStatus;
+}
 
 export default function PlayerPage() {
   const params = useParams<{ videoId: string }>();
@@ -17,6 +102,9 @@ export default function PlayerPage() {
   const [playerData, setPlayerData] = useState<PlayerJson | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  /** True while waiting for the pipeline to complete (player.json not yet available). */
+  const [processingPending, setProcessingPending] = useState(false);
+  const [stderrExpanded, setStderrExpanded] = useState(false);
 
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -28,19 +116,24 @@ export default function PlayerPage() {
 
   const playerRef = useRef<YTPlayer | null>(null);
 
-  // Load player.json (support ?fixture=sample for dev mode)
+  // Load player.json. If it returns 404, switch to polling mode.
   useEffect(() => {
     async function load() {
       setLoading(true);
       try {
-        const url = `/api/videos/${videoId}/player`;
-        const res = await fetch(url);
+        const res = await fetch(`/api/videos/${videoId}/player`);
+        if (res.status === 404) {
+          // Pipeline may still be running — switch to polling panel.
+          setProcessingPending(true);
+          return;
+        }
         if (!res.ok) {
           throw new Error(`player.json の読み込みに失敗しました (${res.status})`);
         }
         const data: PlayerJson = await res.json();
         setPlayerData(data);
         setAudioOffset(data.audio_offset);
+        setProcessingPending(false);
       } catch (e) {
         setError(e instanceof Error ? e.message : "不明なエラー");
       } finally {
@@ -49,6 +142,25 @@ export default function PlayerPage() {
     }
     load();
   }, [videoId]);
+
+  // Poll job status while pipeline is running; reload player.json when done.
+  const jobStatus = useJobStatus(videoId, processingPending);
+  useEffect(() => {
+    if (!jobStatus) return;
+    if (isComplete(jobStatus.status)) {
+      // Pipeline finished — load the player data.
+      setProcessingPending(false);
+      fetch(`/api/videos/${videoId}/player`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data: PlayerJson | null) => {
+          if (data) {
+            setPlayerData(data);
+            setAudioOffset(data.audio_offset);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [jobStatus, videoId]);
 
   const currentChunk = useChunkSync(playerData?.chunks ?? [], currentTime);
 
@@ -154,6 +266,94 @@ export default function PlayerPage() {
         style={{ background: "var(--bg-base)", color: "var(--text-secondary)" }}
       >
         <p className="text-sm">読み込み中...</p>
+      </div>
+    );
+  }
+
+  // Pipeline still running — show processing panel.
+  if (processingPending) {
+    const currentStatus = jobStatus?.status ?? "running";
+    const failed = isFailed(currentStatus);
+    const progressPct = stageProgress(currentStatus);
+
+    return (
+      <div
+        className="flex flex-col items-center justify-center min-h-screen gap-6 px-4"
+        style={{ background: "var(--bg-base)" }}
+      >
+        <div
+          className="w-full max-w-md rounded-xl p-6 flex flex-col gap-4"
+          style={{
+            background: "var(--bg-surface)",
+            border: "1px solid var(--border-subtle)",
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <h1 className="text-base font-medium" style={{ color: "var(--text-primary)" }}>
+              {failed ? "処理に失敗しました" : "処理中..."}
+            </h1>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <div className="flex justify-between text-xs" style={{ color: "var(--text-muted)" }}>
+              <span>現在のステージ: {stageLabel(currentStatus)}</span>
+              <span>{progressPct}%</span>
+            </div>
+            <div
+              className="w-full rounded-full overflow-hidden"
+              style={{ height: 6, background: "var(--bg-elevated)" }}
+            >
+              <div
+                className="h-full rounded-full transition-all"
+                style={{
+                  width: `${progressPct}%`,
+                  background: failed ? "var(--accent-red)" : "var(--accent-blue)",
+                }}
+              />
+            </div>
+          </div>
+
+          {failed && jobStatus?.stderr && (
+            <div className="flex flex-col gap-1">
+              <button
+                className="text-xs text-left"
+                style={{ color: "var(--text-muted)" }}
+                onClick={() => setStderrExpanded((v) => !v)}
+              >
+                {stderrExpanded ? "エラー詳細を閉じる" : "エラー詳細を表示"}
+              </button>
+              {stderrExpanded && (
+                <pre
+                  className="text-xs p-3 rounded overflow-x-auto"
+                  style={{
+                    background: "var(--bg-elevated)",
+                    color: "var(--accent-red)",
+                    maxHeight: 200,
+                    overflowY: "auto",
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-all",
+                  }}
+                >
+                  {jobStatus.stderr}
+                </pre>
+              )}
+            </div>
+          )}
+
+          {!failed && (
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              完了後、自動的にプレイヤーが表示されます。
+            </p>
+          )}
+        </div>
+
+        <a
+          href="/"
+          className="text-sm underline"
+          style={{ color: "var(--accent-blue)" }}
+        >
+          一覧に戻る
+        </a>
       </div>
     );
   }

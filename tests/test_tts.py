@@ -381,6 +381,179 @@ class TestSynthesizeAll:
         with pytest.raises(FileNotFoundError):
             synthesize_all(video_id="NODEMO00001", speaker=3)
 
+    def test_overflow_triggers_resynth_at_higher_speed(self, tmp_path, monkeypatch):
+        """Issue F: chunk whose audio overflows target by >10% is re-synthesized
+        at a higher speed_scale. Mock makes audio_duration = base / speed_scale."""
+        import io
+        import wave
+
+        video_id = "OVRFLW00001"
+        video_dir = tmp_path / "output" / video_id
+        video_dir.mkdir(parents=True)
+        # 10s target, but at speed=1.1 the mock returns 13s audio (overflow).
+        chunks = [
+            {
+                "chunk_id": 1,
+                "start": 0.0,
+                "end": 10.0,
+                "items": [1],
+                "text_en": "Long narration.",
+                "subtitle_ja": "長いナレーション。",
+                "narration_ja": "とても長いナレーションです。",
+            }
+        ]
+        (video_dir / "chunks.json").write_text(
+            json.dumps(chunks, ensure_ascii=False), encoding="utf-8"
+        )
+        monkeypatch.chdir(tmp_path)
+
+        # base_duration at speed_scale=1.0 -> 14.3s
+        # audio_duration(speed) = base / speed
+        BASE = 14.3
+        speed_history: list[float] = []
+
+        def _wav_bytes(duration_s: float) -> bytes:
+            buf = io.BytesIO()
+            with wave.open(buf, "wb") as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(24000)
+                wf.writeframes(b"\x00\x00" * int(24000 * duration_s))
+            return buf.getvalue()
+
+        async def fake_audio_query(text, speaker, speed_scale=1.1, **kwargs):
+            speed_history.append(speed_scale)
+            return {"speedScale": speed_scale, "_speed": speed_scale}
+
+        async def fake_synthesize(query, speaker):
+            speed = query.get("_speed", query.get("speedScale", 1.1))
+            return _wav_bytes(BASE / speed)
+
+        with patch("pipeline.tts.synthesize.VoicevoxClient") as MockClient:
+            instance = AsyncMock()
+            instance.audio_query = AsyncMock(side_effect=fake_audio_query)
+            instance.synthesize = AsyncMock(side_effect=fake_synthesize)
+            MockClient.return_value = instance
+
+            from pipeline.tts.synthesize import synthesize_all
+            segments = synthesize_all(
+                video_id=video_id, speaker=3, speed_scale=1.1, force=True
+            )
+
+        # First attempt at 1.1 -> 14.3/1.1 = 13.0s (overflow vs 10s * 1.1 = 11s slack).
+        # Re-synth at a higher speed should have been requested.
+        assert len(speed_history) >= 2, f"expected re-synth, got speeds={speed_history}"
+        assert speed_history[-1] > speed_history[0]
+        # Final audio should be at-or-near target (under target * 1.10).
+        assert segments[0].audio_duration <= 10.0 * 1.10 + 0.5
+
+    def test_overflow_resynth_caps_at_max_speed(self, tmp_path, monkeypatch):
+        """Computed new_speed must never exceed 1.5."""
+        import io
+        import wave
+
+        video_id = "OVRFLW00002"
+        video_dir = tmp_path / "output" / video_id
+        video_dir.mkdir(parents=True)
+        chunks = [
+            {
+                "chunk_id": 1,
+                "start": 0.0,
+                "end": 5.0,
+                "items": [1],
+                "text_en": "Way too much.",
+                "subtitle_ja": "長すぎる。",
+                "narration_ja": "極端に長いナレーション。",
+            }
+        ]
+        (video_dir / "chunks.json").write_text(
+            json.dumps(chunks, ensure_ascii=False), encoding="utf-8"
+        )
+        monkeypatch.chdir(tmp_path)
+
+        BASE = 50.0  # huge overflow at any reasonable speed
+        speed_history: list[float] = []
+
+        def _wav_bytes(duration_s: float) -> bytes:
+            buf = io.BytesIO()
+            with wave.open(buf, "wb") as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(24000)
+                wf.writeframes(b"\x00\x00" * int(24000 * duration_s))
+            return buf.getvalue()
+
+        async def fake_audio_query(text, speaker, speed_scale=1.1, **kwargs):
+            speed_history.append(speed_scale)
+            return {"speedScale": speed_scale, "_speed": speed_scale}
+
+        async def fake_synthesize(query, speaker):
+            speed = query.get("_speed", query.get("speedScale", 1.1))
+            return _wav_bytes(BASE / speed)
+
+        with patch("pipeline.tts.synthesize.VoicevoxClient") as MockClient:
+            instance = AsyncMock()
+            instance.audio_query = AsyncMock(side_effect=fake_audio_query)
+            instance.synthesize = AsyncMock(side_effect=fake_synthesize)
+            MockClient.return_value = instance
+
+            from pipeline.tts.synthesize import synthesize_all
+            synthesize_all(video_id=video_id, speaker=3, speed_scale=1.1, force=True)
+
+        assert max(speed_history) <= 1.5 + 1e-6
+
+    def test_no_overflow_no_resynth(self, tmp_path, monkeypatch):
+        """Audio within target * 1.10 must not trigger re-synth."""
+        import io
+        import wave
+
+        video_id = "OKDUR000001"
+        video_dir = tmp_path / "output" / video_id
+        video_dir.mkdir(parents=True)
+        chunks = [
+            {
+                "chunk_id": 1,
+                "start": 0.0,
+                "end": 10.0,
+                "items": [1],
+                "text_en": "Short.",
+                "subtitle_ja": "短い。",
+                "narration_ja": "短いです。",
+            }
+        ]
+        (video_dir / "chunks.json").write_text(
+            json.dumps(chunks, ensure_ascii=False), encoding="utf-8"
+        )
+        monkeypatch.chdir(tmp_path)
+
+        speed_history: list[float] = []
+        # Produce 9s audio (under 10s target -> no overflow).
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(24000)
+            wf.writeframes(b"\x00\x00" * int(24000 * 9.0))
+        wav_bytes = buf.getvalue()
+
+        async def fake_audio_query(text, speaker, speed_scale=1.1, **kwargs):
+            speed_history.append(speed_scale)
+            return {"speedScale": speed_scale}
+
+        async def fake_synthesize(query, speaker):
+            return wav_bytes
+
+        with patch("pipeline.tts.synthesize.VoicevoxClient") as MockClient:
+            instance = AsyncMock()
+            instance.audio_query = AsyncMock(side_effect=fake_audio_query)
+            instance.synthesize = AsyncMock(side_effect=fake_synthesize)
+            MockClient.return_value = instance
+
+            from pipeline.tts.synthesize import synthesize_all
+            synthesize_all(video_id=video_id, speaker=3, speed_scale=1.1, force=True)
+
+        assert speed_history == [1.1]
+
 
 # ---------------------------------------------------------------------------
 # Integration test — real VOICEVOX (skipped if not running)

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import type { VideoSummary, ProcessingStatus } from "@/lib/types";
 
 function statusLabel(status: ProcessingStatus): { label: string; color: string; bg: string } {
@@ -29,9 +30,10 @@ function formatDuration(seconds: number): string {
 }
 
 export default function HomePage() {
+  const router = useRouter();
   const [url, setUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [submitMessage, setSubmitMessage] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [videos, setVideos] = useState<VideoSummary[]>([]);
   const [loadingVideos, setLoadingVideos] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -56,7 +58,7 @@ export default function HomePage() {
     if (!url.trim()) return;
 
     setSubmitting(true);
-    setSubmitMessage(null);
+    setSubmitError(null);
 
     try {
       const res = await fetch("/api/process", {
@@ -64,14 +66,23 @@ export default function HomePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: url.trim() }),
       });
-      if (res.ok) {
-        setSubmitMessage("処理キューに追加しました。しばらくお待ちください。");
-        setUrl("");
-      } else {
-        setSubmitMessage("エラーが発生しました。URLを確認してください。");
+
+      if (res.status === 400) {
+        const body = await res.json() as { error?: string };
+        setSubmitError(body.error ?? "エラーが発生しました。URLを確認してください。");
+        return;
       }
+
+      if (!res.ok) {
+        setSubmitError("エラーが発生しました。URLを確認してください。");
+        return;
+      }
+
+      const data = await res.json() as { video_id: string };
+      // Redirect immediately — the play page handles "not yet ready" state.
+      router.push(`/play/${data.video_id}`);
     } catch {
-      setSubmitMessage("ネットワークエラーが発生しました。");
+      setSubmitError("ネットワークエラーが発生しました。");
     } finally {
       setSubmitting(false);
     }
@@ -149,16 +160,12 @@ export default function HomePage() {
                 {submitting ? "送信中..." : "処理開始"}
               </button>
             </div>
-            {submitMessage && (
+            {submitError && (
               <p
                 className="text-sm"
-                style={{
-                  color: submitMessage.includes("エラー")
-                    ? "var(--accent-red)"
-                    : "var(--accent-green)",
-                }}
+                style={{ color: "var(--accent-red)" }}
               >
-                {submitMessage}
+                {submitError}
               </p>
             )}
           </form>

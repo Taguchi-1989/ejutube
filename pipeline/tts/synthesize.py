@@ -42,6 +42,33 @@ def _load_existing_segments(video_id: str) -> dict[int, NarrationSegment]:
         return {}
 
 
+# Auto-fit constants (Issue F).
+# If audio overflows target by >10%, re-synthesize at a higher speed to fit.
+_OVERFLOW_SLACK = 1.10        # 10% slack before triggering re-synth
+_AIM_UNDER = 1.05             # aim slightly under target on retry
+_MAX_SPEED_SCALE = 1.5        # faster than this becomes unintelligible
+_RESYNTH_MIN_DELTA = 0.01     # don't re-synth for a negligible speed bump
+
+
+async def _synth_at_speed(
+    client: VoicevoxClient,
+    text: str,
+    speaker: int,
+    speed_scale: float,
+    wav_path: Path,
+) -> float:
+    """Synthesize *text* at *speed_scale*, write WAV, return measured duration."""
+    query = await client.audio_query(
+        text=text,
+        speaker=speaker,
+        speed_scale=speed_scale,
+    )
+    wav_bytes = await client.synthesize(query=query, speaker=speaker)
+    wav_path.parent.mkdir(parents=True, exist_ok=True)
+    wav_path.write_bytes(wav_bytes)
+    return measure_wav_duration(wav_path)
+
+
 async def _synth_one(
     client: VoicevoxClient,
     chunk: Chunk,
@@ -65,17 +92,33 @@ async def _synth_one(
             return existing_seg
 
     async with sem:
-        query = await client.audio_query(
+        final_speed = speed_scale
+        audio_duration = await _synth_at_speed(
+            client=client,
             text=chunk.narration_ja,
             speaker=speaker,
-            speed_scale=speed_scale,
+            speed_scale=final_speed,
+            wav_path=wav_path,
         )
-        wav_bytes = await client.synthesize(query=query, speaker=speaker)
 
-    wav_path.parent.mkdir(parents=True, exist_ok=True)
-    wav_path.write_bytes(wav_bytes)
-
-    audio_duration = measure_wav_duration(wav_path)
+        # Issue F: auto-fit if audio overflows target by >10%.
+        if target_duration > 0 and audio_duration > target_duration * _OVERFLOW_SLACK:
+            ratio = audio_duration / (target_duration * _AIM_UNDER)
+            new_speed = min(_MAX_SPEED_SCALE, final_speed * ratio)
+            if new_speed > final_speed + _RESYNTH_MIN_DELTA:
+                print(
+                    f"[tts] chunk {chunk.chunk_id}: overflow "
+                    f"{audio_duration:.2f}s > target {target_duration:.2f}s — "
+                    f"re-synth at speed_scale={new_speed:.3f} (was {final_speed:.3f})"
+                )
+                audio_duration = await _synth_at_speed(
+                    client=client,
+                    text=chunk.narration_ja,
+                    speaker=speaker,
+                    speed_scale=new_speed,
+                    wav_path=wav_path,
+                )
+                final_speed = new_speed
 
     return NarrationSegment(
         chunk_id=chunk.chunk_id,

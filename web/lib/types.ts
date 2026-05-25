@@ -62,7 +62,22 @@ export interface VideoSummary {
   thumbnail_url: string;
 }
 
+/** @deprecated Stub type replaced by ProcessResult in /api/process/route.ts */
 export interface ProcessJobResult {
   jobId: string;
   status: "queued";
+}
+
+export interface ProcessApiResult {
+  video_id: string;
+  status: "started" | "already_processed" | "in_progress";
+}
+
+export interface JobStatus {
+  video_id: string;
+  /** Current pipeline status. "running" means the process is alive but no metadata yet. */
+  status: ProcessingStatus | "running" | "failed_unknown";
+  started_at: string | null;
+  exit_code: number | null;
+  stderr?: string;
 }

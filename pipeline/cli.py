@@ -466,9 +466,22 @@ def translate(
 @app.command()
 def narrate(
     video_id: str = typer.Argument(..., help="YouTube video_id"),
+    force: bool = typer.Option(False, "--force", help="既存の narration_ja を再生成する"),
 ) -> None:
     """chunks.json に読み上げ台本 (narration_ja) を追加する。"""
+    import json as _json
     from pipeline.translation import narrate_chunks
+
+    if force:
+        # Clear narration_ja on every chunk so the stage re-runs end-to-end.
+        path = _output_base() / video_id / "chunks.json"
+        if path.exists():
+            data = _json.loads(path.read_text(encoding="utf-8"))
+            for c in data:
+                c.pop("narration_ja", None)
+            path.write_text(
+                _json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
 
     chunks = narrate_chunks(video_id)
     typer.echo(
@@ -490,9 +503,15 @@ def summarize(
 @app.command("extract-commands")
 def extract_commands_cmd(
     video_id: str = typer.Argument(..., help="YouTube video_id"),
+    force: bool = typer.Option(False, "--force", help="既存の commands.md を上書きする"),
 ) -> None:
     """transcript.normalized.json からコマンド・パスを抽出して commands.md に書き出す。"""
     from pipeline.translation import extract_commands
+
+    out = _output_base() / video_id / "commands.md"
+    if out.exists() and not force:
+        typer.echo(f"[skip] commands.md exists at {out} (use --force to overwrite)")
+        return
 
     path = extract_commands(video_id)
     typer.echo(f"wrote {path}")

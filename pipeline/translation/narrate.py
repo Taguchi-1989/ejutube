@@ -27,19 +27,26 @@ def _system_prompt(glossary: dict[str, str]) -> str:
     return (
         "あなたは英語チュートリアル動画の日本語ナレーション台本作成者です。\n"
         "成果物は TTS で読み上げられます。\n"
+        "重要: 字幕とは異なる文章にすること。同一にしてはならない。\n"
+        "字幕は読む文、ナレーションは耳で聞く文。語順・接続・分割を変える。\n"
         "ルール:\n"
-        "- 1文を短く切る（耳で聞いて分かる長さ）。\n"
-        "- 必要なら「では」「次に」「ここで」「まず」で流れを作る。\n"
+        "- 1文を短く切る。各「。」までは目安 25 文字以下。\n"
+        "- 文頭に「では、」「次に、」「ここで、」「まず、」「さて、」を積極的に使う。\n"
+        "- 字幕で1文だった内容は、ナレーションでは2文以上に分割する。\n"
         "- 不自然な直訳を避ける。ただし、原文にない情報の追加・手順の入れ替えは禁止。\n"
         "- 技術用語・プロダクト名・コマンド・ファイル名・パスは原文のまま読む形で残す。\n"
         "- 敬体（です・ます調）。\n"
         f"用語辞書: {glossary_json}\n"
         "\n"
-        "例:\n"
+        "例1（字幕とナレーションを必ず変える）:\n"
         "EN: Now let's open Cursor and connect it with Claude Code.\n"
-        "JAナレーション: では、ここで Cursor を開きます。次に、Claude Code と連携させます。\n"
+        "字幕: Cursor を開き、Claude Code と接続します。\n"
+        "ナレーション: では、ここで Cursor を開きます。次に、Claude Code に接続しましょう。\n"
+        "\n"
+        "例2:\n"
         "EN: Open your terminal and run npm install.\n"
-        "JAナレーション: まず、ターミナルを開きます。そして npm install を実行します。\n"
+        "字幕: ターミナルを開いて npm install を実行します。\n"
+        "ナレーション: まず、ターミナルを開きます。そして、npm install を実行します。\n"
         "\n"
         "OUTPUT ONLY THE JAPANESE NARRATION TEXT — NO PREAMBLE, NO QUOTES, NO BULLETS, NO EXPLANATION."
     )
@@ -53,7 +60,11 @@ def _user_prompt(prev: Chunk | None, current: Chunk, nxt: Chunk | None) -> str:
     if nxt is not None:
         parts.append(f"[NEXT]\n{nxt.text_en}\n")
     if current.subtitle_ja:
-        parts.append(f"[参考: 字幕]\n{current.subtitle_ja}\n")
+        parts.append(
+            "[DO NOT MATCH THIS — 字幕（同じ文章にしてはならない）]\n"
+            f"{current.subtitle_ja}\n"
+            "上の字幕とは語順・接続・分割を変え、必ず異なる文章にすること。\n"
+        )
     parts.append("CURRENT の読み上げ用日本語ナレーションのみを出力。")
     return "\n".join(parts)
 
