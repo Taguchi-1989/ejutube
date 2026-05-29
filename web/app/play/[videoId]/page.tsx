@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import type { PlayerJson, PlayerChunk, ProcessingStatus, JobStatus } from "@/lib/types";
 import type { YTPlayer } from "@/lib/youtube-types";
 import { YouTubePlayer } from "./_components/YouTubePlayer";
@@ -168,19 +169,29 @@ export default function PlayerPage() {
   const { jobStatus, timedOut, resetTimeout } = useJobStatus(videoId, processingPending);
   useEffect(() => {
     if (!jobStatus) return;
-    if (isComplete(jobStatus.status)) {
-      // Pipeline finished — load the player data.
-      setProcessingPending(false);
-      fetch(`/api/videos/${videoId}/player`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data: PlayerJson | null) => {
-          if (data) {
-            setPlayerData(data);
-            setAudioOffset(data.audio_offset);
-          }
-        })
-        .catch(() => {});
-    }
+    if (!isComplete(jobStatus.status)) return;
+
+    // Pipeline finished — load the player data. We flip processingPending off
+    // (which stops polling) only after the fetch resolves, inside the async
+    // callback rather than synchronously in the effect body. This avoids a
+    // cascading re-render and prevents a flash of the "not found" screen if
+    // player.json is not yet readable.
+    let cancelled = false;
+    fetch(`/api/videos/${videoId}/player`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: PlayerJson | null) => {
+        if (cancelled) return;
+        if (data) {
+          setPlayerData(data);
+          setAudioOffset(data.audio_offset);
+          setProcessingPending(false);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
   }, [jobStatus, videoId]);
 
   const currentChunk = useChunkSync(playerData?.chunks ?? [], currentTime);
@@ -330,9 +341,9 @@ export default function PlayerPage() {
               ポーリングを再開する
             </button>
           </div>
-          <a href="/" className="text-sm underline" style={{ color: "var(--accent-blue)" }}>
+          <Link href="/" className="text-sm underline" style={{ color: "var(--accent-blue)" }}>
             一覧に戻る
-          </a>
+          </Link>
         </div>
       );
     }
@@ -408,13 +419,13 @@ export default function PlayerPage() {
           )}
         </div>
 
-        <a
+        <Link
           href="/"
           className="text-sm underline"
           style={{ color: "var(--accent-blue)" }}
         >
           一覧に戻る
-        </a>
+        </Link>
       </div>
     );
   }
@@ -428,13 +439,13 @@ export default function PlayerPage() {
         <p className="text-sm" style={{ color: "var(--accent-red)" }}>
           {error ?? "データが見つかりません"}
         </p>
-        <a
+        <Link
           href="/"
           className="text-sm underline"
           style={{ color: "var(--accent-blue)" }}
         >
           トップに戻る
-        </a>
+        </Link>
       </div>
     );
   }
@@ -460,13 +471,13 @@ export default function PlayerPage() {
           borderBottom: "1px solid var(--border-subtle)",
         }}
       >
-        <a
+        <Link
           href="/"
           className="text-sm"
           style={{ color: "var(--text-muted)" }}
         >
           ← 一覧
-        </a>
+        </Link>
         <span style={{ color: "var(--border-subtle)" }}>|</span>
         <h1
           className="text-sm font-medium truncate"

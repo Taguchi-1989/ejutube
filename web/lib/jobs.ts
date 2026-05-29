@@ -93,8 +93,11 @@ export function startJob(
     info.stderr = (info.stderr + chunk.toString()).slice(-2000);
   });
 
-  child.on("exit", (code) => {
-    info.exit_code = code;
+  child.on("exit", (code, signal) => {
+    // A process terminated by a signal reports code === null. Leaving
+    // exit_code null would make the job look perpetually "running", so map a
+    // signal kill to a non-zero (failed) exit code.
+    info.exit_code = code ?? (signal ? -1 : 0);
   });
 
   jobs.set(videoId, info);

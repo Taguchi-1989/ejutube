@@ -68,8 +68,10 @@ function makeJobsModule(spawnFactory) {
       info.stderr = (info.stderr + chunk.toString()).slice(-2000);
     });
 
-    child.on("exit", (code) => {
-      info.exit_code = code;
+    child.on("exit", (code, signal) => {
+      // A signal kill reports code === null; map it to a failed exit code so
+      // the job does not look perpetually "running".
+      info.exit_code = code ?? (signal ? -1 : 0);
     });
 
     jobs.set(videoId, info);
@@ -132,6 +134,33 @@ describe("startJob", () => {
     const r2 = startJob("vid1234567a", "https://youtu.be/vid1234567a");
     assert.equal(r2.created, true, "should create new job after previous exited");
     assert.equal(getJob("vid1234567a").exit_code, null, "new job exit_code is null");
+  });
+
+  test("signal kill (code null) sets a non-null failed exit_code", () => {
+    const child = new FakeChildProcess();
+    const { startJob, getJob } = makeJobsModule(() => child);
+
+    startJob("sig1234567a", "https://youtu.be/sig1234567a");
+
+    // Simulate the process being killed by SIGTERM: code is null, signal set.
+    child.emit("exit", null, "SIGTERM");
+
+    const job = getJob("sig1234567a");
+    assert.equal(
+      job.exit_code,
+      -1,
+      "exit_code should be -1 (not null) after a signal kill so the job is not stuck 'running'"
+    );
+  });
+
+  test("clean exit with code 0 sets exit_code: 0", () => {
+    const child = new FakeChildProcess();
+    const { startJob, getJob } = makeJobsModule(() => child);
+
+    startJob("ok01234567a", "https://youtu.be/ok01234567a");
+    child.emit("exit", 0, null);
+
+    assert.equal(getJob("ok01234567a").exit_code, 0);
   });
 
   test("spawn error event sets exit_code: -1 and stderr (M1)", () => {

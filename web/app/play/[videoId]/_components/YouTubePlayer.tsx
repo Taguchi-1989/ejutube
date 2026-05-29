@@ -44,6 +44,9 @@ export function YouTubePlayer({
 
   useEffect(() => {
     let mounted = true;
+    // Capture the instance this effect creates so cleanup destroys exactly
+    // that player, rather than reading the (possibly reassigned) ref.
+    let createdPlayer: YTPlayer | null = null;
 
     function initPlayer() {
       if (!containerRef.current || !mounted) return;
@@ -81,6 +84,7 @@ export function YouTubePlayer({
         },
       });
 
+      createdPlayer = player;
       (playerRef as React.MutableRefObject<YTPlayer | null>).current = player;
     }
 
@@ -104,7 +108,7 @@ export function YouTubePlayer({
       mounted = false;
       if (intervalRef.current) clearInterval(intervalRef.current);
       try {
-        playerRef.current?.destroy();
+        createdPlayer?.destroy();
       } catch {
         // ignore
       }

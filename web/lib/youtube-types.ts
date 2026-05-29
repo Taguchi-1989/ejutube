@@ -49,7 +49,6 @@ export interface YTPlayerOptions {
 
 declare global {
   interface Window {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     YT: {
       Player: new (container: HTMLElement | string, options: YTPlayerOptions) => YTPlayer;
       PlayerState: typeof YT_PLAYER_STATE;
