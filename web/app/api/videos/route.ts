@@ -1,11 +1,10 @@
-import { NextRequest } from "next/server";
 import fs from "fs";
 import { listVideoIds, getMetadataPath } from "@/lib/output-dir";
 import type { Metadata, VideoSummary } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_req: NextRequest): Promise<Response> {
+export async function GET(): Promise<Response> {
   const ids = listVideoIds();
 
   const summaries: VideoSummary[] = ids.flatMap((videoId) => {

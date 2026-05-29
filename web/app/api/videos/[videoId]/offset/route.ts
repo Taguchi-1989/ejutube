@@ -33,7 +33,10 @@ export async function PATCH(
     typeof body !== "object" ||
     body === null ||
     !("audio_offset" in body) ||
-    typeof (body as Record<string, unknown>).audio_offset !== "number"
+    typeof (body as Record<string, unknown>).audio_offset !== "number" ||
+    // Reject NaN/Infinity — they pass `typeof === "number"` but serialize to
+    // null in JSON, which would corrupt the stored audio_offset.
+    !Number.isFinite((body as Record<string, unknown>).audio_offset)
   ) {
     return Response.json(
       { error: "Body must be { audio_offset: number }" },

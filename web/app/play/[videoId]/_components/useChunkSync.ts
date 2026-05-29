@@ -43,8 +43,6 @@ export function useChunkSync(
 ): PlayerChunk | null {
   return useMemo(
     () => findCurrentChunk(chunks, currentTime),
-    // chunks reference is stable; currentTime changes frequently
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [chunks, currentTime]
   );
 }

@@ -15,9 +15,11 @@ web/.next/
 web/node_modules/
 *.tsbuildinfo
 
-# Generated outputs — never commit audio or processed video assets
+# Generated outputs — never commit audio or processed video assets.
+# NOTE: do NOT use a bare `audio/` pattern here — it also matches source
+# directories like web/app/api/videos/[videoId]/audio/. Generated audio lives
+# under output/ (already ignored) and is additionally covered by *.wav/*.mp3.
 output/
-audio/
 *.wav
 *.mp3
 
